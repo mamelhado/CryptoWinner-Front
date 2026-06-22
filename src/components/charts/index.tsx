@@ -10,22 +10,40 @@ import {
     type IChartApi,
     HistogramSeries,
 } from "lightweight-charts";
-
+import * as signalR from "@microsoft/signalr";
 import { useEffect, useRef, useState } from "react";
 
 import "./styles.css";
 import { CandleStickInterval, type ECandleStickInterval } from "../../domain/enum/ECandleStickInterval";
 import { Legend } from "./legend";
+import type { HubConnection } from "@microsoft/signalr";
 
 // ============================================
 // 1. BINANCE API CONFIGURATION
 // ============================================
 
-const REST_URL_BASE = `https://api.binance.com/api/v3/klines`;
-const WS_URL_BASE = `wss://stream.binance.com:9443/ws`;
+//const REST_URL_BASE = `https://api.binance.com/api/v3/klines`;
+//const WS_URL_BASE = `wss://stream.binance.com:9443/ws`;
+const REST_URL_BASE = `http://localhost:5043/Candle/symbol`;
+const WS_URL_BASE = `http://localhost:5043/candleStickHub`;
 
 // Binance kline format: [openTime, open, high, low, close, volume, closeTime, ...]
 type BinanceKline = [number, string, string, string, string, string, number, ...unknown[]];
+
+interface CandleStickBinance{
+    openTime: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    closeTime: number;
+    quoteAssetVolume: number;
+    numberOfTrades: number;
+    takerBuyBaseAssetVolume: number;
+    takerBuyQuoteAssetVolume: number;
+}
+
 // Binance WebSocket kline message format
 interface BinanceWsMessage {
     e: string; // Event type
@@ -39,6 +57,7 @@ interface BinanceWsMessage {
     };
 }
 
+
 //======================
 // 2. COMPONENT PROPS
 //======================
@@ -50,6 +69,7 @@ interface KlineProps {
 
 const LightChart: React.FC<KlineProps> = (props: KlineProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const [connection, setConnection] = useState<HubConnection>();
     const [historyData, setHistoryData] = useState<CandlestickData[]>();
     //const [intervals, setIntervals] = useState<string[]>(Object.values(CandleStickInterval));
 
@@ -221,16 +241,24 @@ const seriesData = new Map([
         // 6. FETCH HISTORICAL DATA
         // ============================================
         const fetchHistory = async (): Promise<void> => {
-            const response = await fetch(`${REST_URL_BASE}?symbol=${props.symbol}&interval=${chartInterval}&limit=100`);
-            const klines: BinanceKline[] = await response.json();
+            const response = await fetch(`${REST_URL_BASE}?symbol=${props.symbol}&interval=${chartInterval}`);
+            //const klines: BinanceKline[] = await response.json();
+            const klines: CandleStickBinance[] = await response.json();
 
             const history = klines.map((k) => {
+                // const item: CandlestickData = {
+                //     time: (k[0] / 1000) as UTCTimestamp, // Convert ms to seconds!
+                //     open: parseFloat(k[1]),
+                //     high: parseFloat(k[2]),
+                //     low: parseFloat(k[3]),
+                //     close: parseFloat(k[4]),
+                // };
                 const item: CandlestickData = {
-                    time: (k[0] / 1000) as UTCTimestamp, // Convert ms to seconds!
-                    open: parseFloat(k[1]),
-                    high: parseFloat(k[2]),
-                    low: parseFloat(k[3]),
-                    close: parseFloat(k[4]),
+                    time: (k.openTime / 1000) as UTCTimestamp, // Convert ms to seconds!
+                    open: k.open,
+                    high: k.high,
+                    low: k.low,
+                    close: k.close,
                 };
 
                 return item;
@@ -313,6 +341,7 @@ const seriesData = new Map([
         //===================
         // 8.CONNECT WEBSOCKETS
         //===================
+        {/*
         const connectWebSocket = () => {
 
             ws = new WebSocket(`${WS_URL_BASE}/${props.symbol.toLowerCase()}@kline_${chartInterval}`);
@@ -355,18 +384,96 @@ const seriesData = new Map([
 
             ws.onerror = (error) => console.error('WebSocket error:', error);
         }
+        */}
+
+        const connectWebSocket = async () =>{
+            const newConnection = new signalR.HubConnectionBuilder()
+                  .withUrl(WS_URL_BASE) // ajuste para sua URL real
+                  .withAutomaticReconnect()
+                  .configureLogging(signalR.LogLevel.Information)
+                  .build();
+            
+                // Tenta conectar
+                async function start() {
+                  try {
+                    await newConnection.start();
+                    console.log("Conectado ao SignalR");
+                  } catch (err) {
+                    console.error("Erro ao conectar:", err);
+                    setTimeout(start, 3000); // tenta de novo regularmente
+                  }
+                }
+            
+                setConnection(newConnection);
+                start();
+
+        if (!newConnection){
+            return;
+        }
+        else{    
+            // Receber mensagens do hub
+            newConnection.on("CandleClosed", (message: string) => {
+                console.log("message signaR", message)
+            const msg: BinanceWsMessage = JSON.parse(message);
+                    const k = msg.k;
+
+                    // Update chart with latest candle data
+                    candleSeries.update({
+                        time: (k.t / 1000) as UTCTimestamp, // Convert ms to seconds!
+                        open: parseFloat(k.o),
+                        high: parseFloat(k.h),
+                        low: parseFloat(k.l),
+                        close: parseFloat(k.c),
+                    });
+
+                    chart.timeScale().fitContent();
+                    chart.timeScale().scrollToPosition(5, true);
+            });
+        }
+        }
 
         // Load historical data
         fetchHistory();
         connectWebSocket();
 
+        
+
         return () => {
             destroyed = true;
 
-            ws?.close();
+            //ws?.close();
+            connection?.off("ReceiveMessage");
             chart.remove();
         };
     }, [props.symbol, chartInterval]);
+
+    
+    useEffect(() => {
+        if (!connection) return;
+    
+        // Receber mensagens do hub
+        connection.on("CandleClosed", (message: string) => {
+        const msg: BinanceWsMessage = JSON.parse(event.data);
+                const k = msg.k;
+
+                // Update chart with latest candle data
+                candleSeries.update({
+                    time: (k.t / 1000) as UTCTimestamp, // Convert ms to seconds!
+                    open: parseFloat(k.o),
+                    high: parseFloat(k.h),
+                    low: parseFloat(k.l),
+                    close: parseFloat(k.c),
+                });
+
+                chart.timeScale().fitContent();
+                chart.timeScale().scrollToPosition(5, true);
+        });
+    
+        // Cleanup quando desmontar
+        return () => {
+          connection.off("ReceiveMessage");
+        };
+      }, [connection]);
 
 
     return (
