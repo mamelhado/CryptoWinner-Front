@@ -2,3 +2,9 @@
   width: 80vw;
   height: 90vh;
 }
+
+#buttons-container{
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
