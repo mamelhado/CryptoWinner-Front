@@ -281,9 +281,9 @@ const seriesData = new Map([
 
             volumeSeries.setData(klines.map((k) => {
                 const item = {
-                    time: (k[0] / 1000) as UTCTimestamp, // Convert ms to seconds!
-                    value: parseFloat(k[5]),
-                    color: parseFloat(k[4]) >= parseFloat(k[1]) ? '#26a69a' : '#ef5350'
+                    time: (k.openTime / 1000) as UTCTimestamp, // Convert ms to seconds!
+                    value: k.volume,
+                    color: k.close >= k.open ? '#26a69a' : '#ef5350'
                 };
 
                 return item;
@@ -410,7 +410,11 @@ const seriesData = new Map([
         if (!newConnection){
             return;
         }
-        else{    
+        else{
+            //Inscrever num canal
+            newConnection.invoke("Subscribe", `${props.symbol}`, `${chartInterval}`);
+
+
             // Receber mensagens do hub
             newConnection.on("CandleClosed", (message: string) => {
                 console.log("message signaR", message)
@@ -443,17 +447,18 @@ const seriesData = new Map([
 
             //ws?.close();
             connection?.off("ReceiveMessage");
+            connection?.invoke("Unsubscribe", `${props.symbol}`, `${chartInterval}`);
             chart.remove();
         };
     }, [props.symbol, chartInterval]);
 
-    
+    { /*
     useEffect(() => {
         if (!connection) return;
     
         // Receber mensagens do hub
         connection.on("CandleClosed", (message: string) => {
-        const msg: BinanceWsMessage = JSON.parse(event.data);
+        const msg: BinanceWsMessage = JSON.parse(message.data);
                 const k = msg.k;
 
                 // Update chart with latest candle data
@@ -474,7 +479,7 @@ const seriesData = new Map([
           connection.off("ReceiveMessage");
         };
       }, [connection]);
-
+*/ }
 
     return (
         <div 
