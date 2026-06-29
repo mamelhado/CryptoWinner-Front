@@ -66,15 +66,17 @@ interface KlineProps {
     intervals: string[]
 }
 
-const LightChart: React.FC<KlineProps> = (props: KlineProps) => {
+const LightChartBackup: React.FC<KlineProps> = (props: KlineProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const connectionRef = useRef<HubConnection | null>(null);
+    const [connection, setConnection] = useState<HubConnection>();
     const [historyData, setHistoryData] = useState<CandlestickData[]>();
-    const [symbols, setSymbols] = useState<string[]>(["ETHBTC","LTCBTC","BNBBTC","NEOBTC","QTUMETH","EOSETH","SNTETH","BNTETH","BCCBTC","GASBTC","BNBETH","BTCUSDT"]);
+    //const [intervals, setIntervals] = useState<string[]>(Object.values(CandleStickInterval));
+ const [symbols, setSymbols] = useState<string[]>(["ETHBTC","LTCBTC","BNBBTC","NEOBTC","QTUMETH","EOSETH","SNTETH","BNTETH","BCCBTC","GASBTC","BNBETH","BTCUSDT"]);
+
+
     const [chartInterval, setChartInterval] = useState(props.interval);
     const [chartSymbol, setChartSymbol] = useState("ETHBTC");
     const [historyChartSymbol, setHistoryChartSymbol] = useState(["ETHBTC"]);
-    const subscriptionRef = useRef<string>("ETHBTC");
     const intervalColors = {
         '1m': "rgb(124, 157, 249)",
         '1D': '#2962FF',
@@ -121,53 +123,6 @@ const seriesData = new Map([
     return maData;
 }
 
-async function subscribe(symbol: string, interval: string) {
-
-    const conn = connectionRef.current;
-
-    if (!conn)
-        return;
-
-    await conn.invoke("Subscribe", symbol, interval);
-}
-
-async function changeSubscribe(symbol: string, interval: string) {
-
-    const conn = connectionRef.current;
-
-    if (!conn)
-        return;
-
-    await conn.invoke("Unsubscribe", symbol, interval);
-}
-
-/*
-async function unsubscribe(symbol: string, interval: string) {
-
-    const conn = connectionRef.current;
-
-    if (!conn)
-        return;
-
-    await conn.invoke("Unsubscribe", symbol, interval);
-} */
-
-    useEffect(() => {
-        const newConnection = new signalR.HubConnectionBuilder()
-                  .withUrl(WS_URL_BASE) // ajuste para sua URL real
-                  .withAutomaticReconnect()
-                  .configureLogging(signalR.LogLevel.Information)
-                  .build();
-
-        connectionRef.current = newConnection;
-
-        newConnection.start();
-
-        return () => {
-            newConnection.stop();
-        }
-
-    }, []);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -466,6 +421,34 @@ async function unsubscribe(symbol: string, interval: string) {
         };
     }, [chartSymbol, chartInterval]);
 
+    { /*
+    useEffect(() => {
+        if (!connection) return;
+    
+        // Receber mensagens do hub
+        connection.on("CandleClosed", (message: string) => {
+        const msg: BinanceWsMessage = JSON.parse(message.data);
+                const k = msg.k;
+
+                // Update chart with latest candle data
+                candleSeries.update({
+                    time: (k.t / 1000) as UTCTimestamp, // Convert ms to seconds!
+                    open: parseFloat(k.o),
+                    high: parseFloat(k.h),
+                    low: parseFloat(k.l),
+                    close: parseFloat(k.c),
+                });
+
+                chart.timeScale().fitContent();
+                chart.timeScale().scrollToPosition(5, true);
+        });
+    
+        // Cleanup quando desmontar
+        return () => {
+          connection.off("ReceiveMessage");
+        };
+      }, [connection]);
+*/ }
 
     return (
         <div 
@@ -504,4 +487,4 @@ async function unsubscribe(symbol: string, interval: string) {
     );
 }
 
-export { LightChart };
+//export { LightChartBackup };

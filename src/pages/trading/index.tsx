@@ -15,7 +15,6 @@ interface ChatProps {
 
 const ChartPage = () => {
 
-  const SYMBOL = "BTCUSDT";
   const INTERVAL: ECandleStickInterval = CandleStickInterval.M1;
   const [intervals, setIntervals] = useState<string[]>(["1m","1D","1W","1M","1Y"]);
 
@@ -23,7 +22,6 @@ const ChartPage = () => {
   return (
     <>
       <LightChart
-        symbol={SYMBOL}
         interval={INTERVAL}
         intervals={intervals}
       />
